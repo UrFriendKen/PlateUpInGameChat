@@ -17,19 +17,18 @@ namespace KitchenInGameChat
 
     public struct NewWindowRequest
     {
-        internal int? idOverride = null;
         public string ModGUID;
         public string Name;
         public bool HideName;
-        public Vector3 Position;
         public float MessageTimeOut;
         public int MaxMessageCount;
         public MessageWindowStyle Style;
         public bool IsReadOnly;
         public bool DoNotDraw;
-        public Action<StaticMessageRequest> Callback;
+        public bool CanDrag;
+        public Action<int, StaticMessageRequest> Callback;
 
-        public int ID => idOverride.HasValue? idOverride.Value : VariousUtils.GetID($"{ModGUID}:{Name}");
+        public int ID => MessageWindowController.GetWindowID(ModGUID, Name);
 
         public NewWindowRequest()
         {
@@ -80,6 +79,7 @@ namespace KitchenInGameChat
         public MessageWindowStyle Style;
         public bool IsReadOnly;
         public bool DoNotDraw;
+        public bool CanDrag;
 
         public static CMessageWindow FromNewWindowRequest(NewWindowRequest request)
         {
@@ -93,9 +93,15 @@ namespace KitchenInGameChat
                 MaxMessageCount = request.MaxMessageCount,
                 Style = request.Style,
                 IsReadOnly = request.IsReadOnly,
-                DoNotDraw = request.DoNotDraw
+                DoNotDraw = request.DoNotDraw,
+                CanDrag = request.CanDrag
             };
         }
+    }
+
+    public struct CMessageWindowPreference : IComponentData, IModComponent
+    {
+        public int WindowID;
     }
 
     [InternalBufferCapacity(10)]
@@ -130,10 +136,12 @@ namespace KitchenInGameChat
 
     public class MessageWindowController : GameSystemBase
     {
+        public static ViewType MessageWindowViewType => (ViewType)VariousUtils.GetID($"{Main.MOD_GUID}:MessageWindowView");
+
         private static Queue<StaticMessageRequest> _staticMessageRequests = new Queue<StaticMessageRequest>();
         private static Queue<NewWindowRequest> _newWindowRequests = new Queue<NewWindowRequest>();
 
-        private static Dictionary<int, Action<StaticMessageRequest>> _callbacks = new Dictionary<int, Action<StaticMessageRequest>>();
+        private static Dictionary<int, Action<int, StaticMessageRequest>> _callbacks = new Dictionary<int, Action<int, StaticMessageRequest>>();
 
         EntityContext ctx;
         EntityQuery _messageWindows;
@@ -220,8 +228,8 @@ namespace KitchenInGameChat
                     messageRequest.IsColorOverride,
                     messageRequest.ColorOverride));
 
-                if (_callbacks.TryGetValue(messageRequest.TargetWindowID, out Action<StaticMessageRequest> callback))
-                    callback(messageRequest);
+                if (_callbacks.TryGetValue(messageRequest.TargetWindowID, out Action<int, StaticMessageRequest> callback))
+                    callback(messageRequest.TargetWindowID, messageRequest);
             }
         }
 
@@ -242,40 +250,60 @@ namespace KitchenInGameChat
                 Set(newWindow, new CDoNotPersist());
                 Set(newWindow, new CPersistThroughSceneChanges());
                 Set(newWindow, CMessageWindow.FromNewWindowRequest(newWindowRequest));
-                Set(newWindow, new CPosition(newWindowRequest.Position));
                 EntityManager.AddBuffer<CMessage>(newWindow);
                 Set(newWindow, new CRequiresView()
                 {
-                    Type = Main.MessageWindowViewType,
+                    Type = MessageWindowViewType,
                     PhysicsDriven = false,
                     ViewMode = ViewMode.Screen
                 });
             }
         }
 
-        internal static int InternalCreateMessageWindow(int? id, string modGUID, string name, Vector3 position, bool hideName = false, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<StaticMessageRequest> callback = null)
+        private static int PrivateCreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<int, StaticMessageRequest> callback = null)
         {
+            if (modGUID.IsNullOrEmpty())
+            {
+                Main.LogError("CreateMessageWindow: modGUID cannot be null or empty!");
+                return -1;
+            }
+
+            if (name.IsNullOrEmpty())
+            {
+                Main.LogError("CreateMessageWindow: name cannot be null or empty!");
+                return -1;
+            }
+
             NewWindowRequest request = new NewWindowRequest()
             {
-                idOverride = id,
                 ModGUID = modGUID,
                 Name = name,
                 HideName = hideName,
-                Position = position,
                 MessageTimeOut = messageTimeOutSeconds,
                 MaxMessageCount = maxMessageCount,
                 Style = style,
                 IsReadOnly = isReadOnly,
                 DoNotDraw = doNotDraw,
+                CanDrag = canDrag,
                 Callback = callback
             };
-            _newWindowRequests.Enqueue(request);
+
+            if (Session.CurrentGameNetworkMode == GameNetworkMode.Host)
+            {
+                _newWindowRequests.Enqueue(request);
+            }
+
             return request.ID;
         }
 
-        public static int CreateMessageWindow(string modGUID, string name, Vector3 position, bool hideName = false, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<StaticMessageRequest> callback = null)
+        public static int CreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<int, StaticMessageRequest> callback = null)
         {
-            return InternalCreateMessageWindow(null, modGUID, name, position, hideName, messageTimeOutSeconds, maxMessageCount, style, isReadOnly, doNotDraw, callback);
+            return PrivateCreateMessageWindow(modGUID, name, hideName, canDrag, messageTimeOutSeconds, maxMessageCount, style, isReadOnly, doNotDraw, callback);
+        }
+
+        public static int GetWindowID(string modGUID, string windowName)
+        {
+            return VariousUtils.GetID($"{modGUID}:{windowName}");
         }
 
         public static void SendMessage(int targetWindowID, string displayName, string text, Color? colorOverride = null)

@@ -19,22 +19,18 @@ namespace KitchenInGameChat.Patches
                 messageWindowPrefab.AddComponent<MessageWindowView>();
             }
 
-            if (view_type == Main.MessageWindowViewType)
+            if (view_type == MessageWindowController.MessageWindowViewType)
             {
                 __result = messageWindowPrefab;
                 return false;
             }
+            else if (PreferenceViewRegistry.TryGetPrefab(view_type, out GameObject loadedPrefab))
+            {
+                Main.LogInfo($"{view_type}: {loadedPrefab}");
+                __result = loadedPrefab;
+                return false;
+            }
             return true;
         }
-
-        //[HarmonyPatch(typeof(LocalViewRouter), "GetPrefab")]
-        //[HarmonyPostfix]
-        //static void GetPrefab_Postfix(ViewType view_type, ref GameObject __result)
-        //{
-        //    if (view_type == Main.MessageWindowViewType)
-        //    {
-        //        __result = inGameChatContainerPrefab;
-        //    }
-        //}
     }
 }

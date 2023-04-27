@@ -1,8 +1,6 @@
 ﻿using Kitchen;
 using KitchenLib;
 using KitchenLib.Event;
-using KitchenLib.Utils;
-using PreferenceSystem;
 using System.Reflection;
 using UnityEngine;
 
@@ -23,48 +21,12 @@ namespace KitchenInGameChat
         // e.g. ">=1.1.3" current and all future
         // e.g. ">=1.1.3 <=1.2.3" for all from/until
 
-        // Boolean constant whose value depends on whether you built with DEBUG or RELEASE mode, useful for testing
-#if DEBUG
-        public const bool DEBUG_MODE = true;
-#else
-        public const bool DEBUG_MODE = false;
-#endif
-
-        public static AssetBundle Bundle;
-        public static Main Instance;
-
-        public static AssetDirectory Directory => Instance.AssetDirectory;
-
-        public static ViewType MessageWindowViewType => (ViewType)VariousUtils.GetID($"{MOD_GUID}:MessageWindowView");
-
+        public const string CHAT_WINDOW_NAME = "Chat";
+        public static ViewType? ChatPrefViewType;
         public Main() : base(MOD_GUID, MOD_NAME, MOD_AUTHOR, MOD_VERSION, MOD_GAMEVERSION, Assembly.GetExecutingAssembly()) { }
-
-        public static PreferenceSystemManager PrefManager;
-
-        int ChatWindowID;
-        int ChatWindowID2;
 
         protected override void OnInitialise()
         {
-            LogWarning($"{MOD_GUID} v{MOD_VERSION} in use!");
-            Instance = this;
-            ChatWindowID = MessageWindowController.CreateMessageWindow(MOD_GUID, "Chat", new Vector3(1, 1, 0), hideName: false, isReadOnly: false);
-            ChatWindowID2 = MessageWindowController.CreateMessageWindow(MOD_GUID, "Command Window", new Vector3(1, 1, 0), hideName: false, isReadOnly: true, doNotDraw: true, callback: ChatMessageCallback);
-            ChatWindowManager.CreateChatWindowManager(ChatWindowID, PrefManager);
-        }
-
-        private void ChatMessageCallback(StaticMessageRequest messageRequest)
-        {
-            Main.LogInfo($"Intercepted message from {messageRequest.Owner}: {messageRequest.Text}");
-        }
-
-        private void AddGameData()
-        {
-            LogInfo("Attempting to register game data...");
-
-            // AddGameDataObject<MyCustomGDO>();
-
-            LogInfo("Done loading game data.");
         }
 
         protected override void OnUpdate()
@@ -73,23 +35,16 @@ namespace KitchenInGameChat
 
         protected override void OnPostActivate(KitchenMods.Mod mod)
         {
-            // TODO: Uncomment the following if you have an asset bundle.
-            // TODO: Also, make sure to set EnableAssetBundleDeploy to 'true' in your ModName.csproj
+            LogWarning($"{MOD_GUID} v{MOD_VERSION} in use!");
+            ChatPreferenceView.CreatePreferences(MOD_GUID, MOD_NAME);
 
-            // LogInfo("Attempting to load asset bundle...");
-            // Bundle = mod.GetPacks<AssetBundleModPack>().SelectMany(e => e.AssetBundles).First();
-            // LogInfo("Done loading asset bundle.");
-
-            // Register custom GDOs
-            AddGameData();
-
-            // Perform actions when game data is built
-            Events.BuildGameDataEvent += delegate (object s, BuildGameDataEventArgs args)
+            Events.BuildGameDataPostViewInitEvent += delegate (object _, BuildGameDataEventArgs args)
             {
-
+                Main.LogInfo("BuildGameDataPostViewInitEvent");
+                PreferenceViewRegistry.TryRegister<ChatPreferenceView>(out ViewType prefViewType);
+                ChatPrefViewType = prefViewType;
             };
 
-            ChatWindowManager.CreatePreferences(MOD_GUID, MOD_NAME);
         }
 
         #region Logging

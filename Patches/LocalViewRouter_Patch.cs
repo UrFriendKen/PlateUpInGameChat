@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using Kitchen;
+using KitchenInGameChat.MessageWindow;
 using UnityEngine;
 
 namespace KitchenInGameChat.Patches

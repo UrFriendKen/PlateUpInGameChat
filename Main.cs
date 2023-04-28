@@ -1,4 +1,5 @@
 ﻿using Kitchen;
+using KitchenInGameChat.MessageWindow;
 using KitchenLib;
 using KitchenLib.Event;
 using System.Reflection;

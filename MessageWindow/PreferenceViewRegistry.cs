@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace KitchenInGameChat
+namespace KitchenInGameChat.MessageWindow
 {
     public static class PreferenceViewRegistry
     {
@@ -62,7 +62,7 @@ namespace KitchenInGameChat
             if (_typeCache.ContainsKey(viewType))
             {
                 LogWarning($"ViewType KEY COLLISION between {type} and {_typeCache[viewType]}");
-                GameObject.Destroy(windowPrefViewObj);
+                UnityEngine.Object.Destroy(windowPrefViewObj);
                 return true;
             }
             windowPrefViewObj.transform.SetParent(_prefabContainer.transform);
@@ -77,7 +77,7 @@ namespace KitchenInGameChat
             if (_requireInit)
             {
                 _prefabContainer = new GameObject("PrefViewReg Prefab Container");
-                GameObject.DontDestroyOnLoad(_prefabContainer);
+                UnityEngine.Object.DontDestroyOnLoad(_prefabContainer);
                 _prefabContainer.SetActive(false);
             }
             _requireInit = false;

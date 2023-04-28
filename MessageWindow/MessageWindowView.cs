@@ -8,7 +8,7 @@ using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 
-namespace KitchenInGameChat
+namespace KitchenInGameChat.MessageWindow
 {
     public class MessageWindowView : ResponsiveObjectView<MessageWindowView.ViewData, MessageWindowView.ResponseData>
     {
@@ -20,7 +20,7 @@ namespace KitchenInGameChat
             [Key(2)] public string Text;
             [Key(3)] public bool IsColorOverride;
             [Key(4)] public Color ColorOverride;
-            
+
             public override bool Equals(object obj)
             {
                 if (!(obj is Message other))
@@ -186,7 +186,7 @@ namespace KitchenInGameChat
         bool _drawWindow = false;
         bool _canDrag = true;
         MessageWindowStyle _style = MessageWindowStyle.Normal;
-        
+
         protected override void UpdateData(ViewData data)
         {
             _id = data.WindowID;
@@ -268,7 +268,7 @@ namespace KitchenInGameChat
                 RecalculateDisplayVariables();
                 RecalculateColorsAndTextures();
                 GUI.backgroundColor = _backgroundColorWithAlpha;
-                _windowRect = GUILayout.Window(_id, _windowRect, DrawWindow, !_hideTitle? _title : string.Empty, _windowStyle);
+                _windowRect = GUILayout.Window(_id, _windowRect, DrawWindow, !_hideTitle ? _title : string.Empty, _windowStyle);
                 if (GUI.GetNameOfFocusedControl().IsNullOrEmpty())
                 {
                     bool shouldFocus = false;
@@ -341,7 +341,7 @@ namespace KitchenInGameChat
             _textFieldWidth = TextFieldWidthPercent * windowWidth;
             float textFieldHeight = _textFieldStyle.CalcHeight(new GUIContent(_textFieldContent), _textFieldWidth);
 
-            _scrollViewHeight = windowHeight - _windowStyle.padding.vertical - (_isReadOnly? 0f : INTER_ELEMENT_SPACE + textFieldHeight) - (!PreventDragOverride && _canDrag ? handleHeight : 0f);
+            _scrollViewHeight = windowHeight - _windowStyle.padding.vertical - (_isReadOnly ? 0f : INTER_ELEMENT_SPACE + textFieldHeight) - (!PreventDragOverride && _canDrag ? handleHeight : 0f);
         }
 
         void RecalculateColorsAndTextures()
@@ -466,7 +466,7 @@ namespace KitchenInGameChat
         {
             if (keyCode == KeyCode.None)
                 return false;
-            
+
             if (Event.current.keyCode == keyCode)
             {
                 if (down)

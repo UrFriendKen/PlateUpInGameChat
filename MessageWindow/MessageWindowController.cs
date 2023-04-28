@@ -8,7 +8,7 @@ using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 
-namespace KitchenInGameChat
+namespace KitchenInGameChat.MessageWindow
 {
     public enum MessageWindowStyle
     {
@@ -197,7 +197,7 @@ namespace KitchenInGameChat
                 {
                     message.TimeRemaining -= dt;
                 }
-                if ((message.HasTimeOut && message.TimeRemaining < 0f) || counter > messageWindow.MaxMessageCount)
+                if (message.HasTimeOut && message.TimeRemaining < 0f || counter > messageWindow.MaxMessageCount)
                 {
                     messages.RemoveAt(i);
                 }
@@ -315,7 +315,7 @@ namespace KitchenInGameChat
                 Owner = displayName,
                 Text = text,
                 IsColorOverride = colorOverride.HasValue,
-                ColorOverride = colorOverride.HasValue? colorOverride.Value : default
+                ColorOverride = colorOverride.HasValue ? colorOverride.Value : default
             };
             _staticMessageRequests.Enqueue(request);
         }

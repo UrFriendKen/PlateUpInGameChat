@@ -1,4 +1,5 @@
 ﻿using Kitchen;
+using KitchenInGameChat.MessageWindow;
 using KitchenLib.Utils;
 using KitchenMods;
 using Unity.Entities;
@@ -52,7 +53,7 @@ namespace KitchenInGameChat
         {
             if (!messageRequest.IsPlayerMessage)
                 return;
-            if (!messageRequest.Text.StartsWith("/"))
+            if (!messageRequest.Text.StartsWith("/") || messageRequest.Text.StartsWith("//"))
                 return;
 
             HandleCommand(messageRequest, out string statusMessage);

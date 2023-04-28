@@ -3,7 +3,7 @@ using KitchenLib.Utils;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace KitchenInGameChat
+namespace KitchenInGameChat.MessageWindow
 {
     public abstract class GenericWindowPreferenceView : GenericObjectView
     {
@@ -41,7 +41,7 @@ namespace KitchenInGameChat
 
         private bool TryGetChatWindowView(out MessageWindowView view)
         {
-            foreach (MessageWindowView messageWindowView in UnityEngine.Object.FindObjectsOfType<MessageWindowView>())
+            foreach (MessageWindowView messageWindowView in FindObjectsOfType<MessageWindowView>())
             {
                 if (messageWindowView.ID != MessageWindowController.GetWindowID(ModGUID, TargetWindowName))
                     continue;

@@ -1,6 +1,7 @@
 ﻿using Controllers;
 using Kitchen;
 using Kitchen.NetworkSupport;
+using KitchenInGameChat.Utils;
 using KitchenLib.Utils;
 using MessagePack;
 using System.Collections.Generic;
@@ -12,6 +13,30 @@ namespace KitchenInGameChat.MessageWindow
 {
     public class MessageWindowView : ResponsiveObjectView<MessageWindowView.ViewData, MessageWindowView.ResponseData>
     {
+        private static HashSet<int> _inputBlockingWindows = new HashSet<int>();
+
+        public static bool ShouldBlockInput => _inputBlockingWindows.Count > 0;
+
+        internal static bool ShouldBlockInputForPlayer(int playerId)
+        {
+            return ShouldBlockInput && PlayerUtils.GetLocalPlayerControllerType(playerId) == ControllerType.Keyboard;
+        }
+
+        protected void AddInputBlock()
+        {
+            if (_id == -1 || _inputBlockingWindows.Contains(_id))
+                return;
+            _inputBlockingWindows.Add(_id);
+        }
+
+        protected void RemoveInputBlock()
+        {
+            if (_inputBlockingWindows.Contains(_id))
+                _inputBlockingWindows.Remove(_id);
+        }
+
+
+
         [MessagePackObject(false)]
         public struct Message
         {
@@ -172,10 +197,12 @@ namespace KitchenInGameChat.MessageWindow
         public int FontSize = 12;
         public float WindowWidthPercent = 0.2f;
         public float WindowHeightPercent = 0.15f;
+        public bool TopDragHandleEnabled = true;
         public float DragHandleHeightPercent = 0.075f;
         public bool PreventDragOverride = false;
+        public bool BlockInputCaptureWhenFocused = false;
 
-        int _id = 0;
+        int _id = -1;
         public int ID => _id;
         List<Message> _messages = new List<Message>();
         Queue<(string, string)> _outgoingMessages = new Queue<(string, string)>();
@@ -233,6 +260,7 @@ namespace KitchenInGameChat.MessageWindow
         public bool IsInit { get; protected set; } = false;
 
         Rect _windowRect;
+        Rect _topHandleRect;
         Rect _handleRect;
         float _scrollViewHeight;
 
@@ -290,9 +318,21 @@ namespace KitchenInGameChat.MessageWindow
                 }
                 else if (Input.GetKey(AltFocusTextFieldKeyCode) == false)
                     _altFocusKeyWasPressed = false;
+
+                CheckBlockInput();
             }
             if (_textFieldWasDefocusedDelay > 0f)
                 _textFieldWasDefocusedDelay -= DeltaTime;
+        }
+
+        void CheckBlockInput()
+        {
+            if (BlockInputCaptureWhenFocused && GUI.GetNameOfFocusedControl() == _uniqueTextFieldName)
+            {
+                AddInputBlock();
+                return;
+            }
+            RemoveInputBlock();
         }
 
         void RecalculateDisplayVariables()
@@ -334,6 +374,9 @@ namespace KitchenInGameChat.MessageWindow
                 _verticalScrollbarStyle = new GUIStyle(GUI.skin.verticalScrollbar);
             else
                 _verticalScrollbarStyle = GUIStyle.none;
+
+            float topHandleHeight = _windowStyle.border.top;
+            _topHandleRect = new Rect(0, 0, windowWidth, topHandleHeight);
 
             float handleHeight = DragHandleHeightPercent * windowHeight;
             _handleRect = new Rect(0, windowHeight - handleHeight, windowWidth, handleHeight);
@@ -444,7 +487,7 @@ namespace KitchenInGameChat.MessageWindow
             {
                 GUI.DrawTexture(_handleRect, _handleTexture);
                 bool isInteractingWithHandle = false;
-                if (_handleRect.Contains(Event.current.mousePosition))
+                if (_handleRect.Contains(Event.current.mousePosition) || (TopDragHandleEnabled && _topHandleRect.Contains(Event.current.mousePosition)))
                 {
                     _resetOpacityProgress = true;
                     if (Input.GetMouseButton(0) == true)
@@ -458,6 +501,8 @@ namespace KitchenInGameChat.MessageWindow
                 {
                     IsDragging = false;
                 }
+                if (TopDragHandleEnabled)
+                    GUI.DragWindow(_topHandleRect);
                 GUI.DragWindow(_handleRect);
             }
         }

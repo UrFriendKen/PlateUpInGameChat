@@ -1,6 +1,7 @@
 ﻿using KitchenInGameChat.MessageWindow;
 using PreferenceSystem;
 using System;
+using System.Linq.Expressions;
 using UnityEngine;
 
 namespace KitchenInGameChat
@@ -26,6 +27,7 @@ namespace KitchenInGameChat
         public const string CHAT_INACTIVE_OPACITY = "chatInactiveOpacity";
         public const string CHAT_WINDOW_WIDTH_PERCENT_ID = "chatWindowWidthPercent";
         public const string CHAT_WINDOW_HEIGHT_PERCENT_ID = "chatWindowHeightPercent";
+        public const string CHAT_TOP_DRAG_HANDLE_ENABLED_ID = "chatTopDragHandleEnabled";
         public const string CHAT_DRAG_HANDLE_HEIGHT_PERCENT_ID = "chatDragHandleHeightPercent";
         public const string CHAT_WINDOW_IS_FIXED_POS_ID = "chatWindowFixedPosition";
         public const string CHAT_WINDOW_FIXED_POS_X_ID = "chatWindowFixedPositionX";
@@ -35,6 +37,7 @@ namespace KitchenInGameChat
         public const string CHAT_SEND_KEY_FOCUSES_TEXT_FIELD_ID = "chatSendKeyFocusesTextField";
         public const string CHAT_ALT_FOCUS_TEXT_FIELD_KEY_ID = "chatAltFocusTextFieldKey";
         public const string CHAT_DEFOCUS_TEXT_FIELD_KEY_ID = "chatDefocusTextFieldKey";
+        public const string CHAT_BLOCK_PLAYER_INPUTS_WHEN_FOCUSED_ID = "chatBlockPlayerInputsWhenFocused";
 
         protected override void UpdateWindowPreferences(MessageWindowView window)
         {
@@ -53,8 +56,10 @@ namespace KitchenInGameChat
             window.ActiveBackgroundOpacity = PrefManager.Get<float>(CHAT_ACTIVE_OPACITY);
             window.InactiveBackgroundOpacity = PrefManager.Get<float>(CHAT_INACTIVE_OPACITY);
             window.WindowWidthPercent = PrefManager.Get<float>(CHAT_WINDOW_WIDTH_PERCENT_ID);
+            window.TopDragHandleEnabled = PrefManager.Get<bool>(CHAT_TOP_DRAG_HANDLE_ENABLED_ID);
             window.WindowHeightPercent = PrefManager.Get<float>(CHAT_WINDOW_HEIGHT_PERCENT_ID);
             window.DragHandleHeightPercent = PrefManager.Get<float>(CHAT_DRAG_HANDLE_HEIGHT_PERCENT_ID);
+            window.BlockInputCaptureWhenFocused = PrefManager.Get<bool>(CHAT_BLOCK_PLAYER_INPUTS_WHEN_FOCUSED_ID);
 
             KeyCode keyCode;
             if (Enum.TryParse(PrefManager.Get<string>(CHAT_SEND_MESSAGE_KEY_ID), out keyCode))
@@ -218,12 +223,24 @@ namespace KitchenInGameChat
                     .AddSpacer()
                 .SubmenuDone()
                 .AddSubmenu("Advanced", "advanced")
+                    .AddLabel("Block Player Inputs")
+                    .AddOption<bool>(
+                        CHAT_BLOCK_PLAYER_INPUTS_WHEN_FOCUSED_ID,
+                        true,
+                        new bool[] { false, true },
+                        new string[] { "Disabled", "Enabled" })
                     .AddLabel("Drag Handle Height")
                     .AddOption<float>(
                         CHAT_DRAG_HANDLE_HEIGHT_PERCENT_ID,
                         0.03f,
                         dragHandleSizePercentKeys,
                         dragHandleSizePercentStrings)
+                    .AddLabel("Drag By Title Bar")
+                    .AddOption<bool>(
+                        CHAT_TOP_DRAG_HANDLE_ENABLED_ID,
+                        true,
+                        new bool[] { false, true },
+                        new string[] { "Not Allowed", "Allowed" })
                     .AddSpacer()
                     .AddLabel("Empty Send Defocus Delay (Seconds)")
                     .AddOption<float>(

@@ -1,4 +1,5 @@
 ﻿using Kitchen;
+using KitchenInGameChat.Commands;
 using KitchenLib.Utils;
 using KitchenMods;
 using System;
@@ -26,7 +27,7 @@ namespace KitchenInGameChat.MessageWindow
         public bool IsReadOnly;
         public bool DoNotDraw;
         public bool CanDrag;
-        public Action<int, StaticMessageRequest> Callback;
+        public BaseCommandSet CommandHandler;
 
         public int ID => MessageWindowController.GetWindowID(ModGUID, Name);
 
@@ -141,7 +142,7 @@ namespace KitchenInGameChat.MessageWindow
         private static Queue<StaticMessageRequest> _staticMessageRequests = new Queue<StaticMessageRequest>();
         private static Queue<NewWindowRequest> _newWindowRequests = new Queue<NewWindowRequest>();
 
-        private static Dictionary<int, Action<int, StaticMessageRequest>> _callbacks = new Dictionary<int, Action<int, StaticMessageRequest>>();
+        private static Dictionary<int, BaseCommandSet> _callbacks = new Dictionary<int, BaseCommandSet>();
 
         EntityContext ctx;
         EntityQuery _messageWindows;
@@ -209,27 +210,51 @@ namespace KitchenInGameChat.MessageWindow
             if (_staticMessageRequests.Count > 0)
             {
                 StaticMessageRequest messageRequest = _staticMessageRequests.Dequeue();
-                if (!windowsAndBuffers.ContainsKey(messageRequest.TargetWindowID))
+                if (!windowsAndBuffers.TryGetValue(messageRequest.TargetWindowID, out (CMessageWindow, DynamicBuffer<CMessage>) windowAndBuffer))
                 {
                     Main.LogError($"Failed to send text! Window with ID {messageRequest.TargetWindowID} does not exist.");
                     return;
                 }
 
-                CMessageWindow messageWindow = windowsAndBuffers[messageRequest.TargetWindowID].Item1;
-                DynamicBuffer<CMessage> messageBuffer = windowsAndBuffers[messageRequest.TargetWindowID].Item2;
-                messageBuffer.Add(CMessage.Create(
-                    messageRequest.TargetWindowID,
-                    messageWindow.LastMessageIndex++,
-                    messageWindow.MessageTimeOut > 0f,
-                    messageWindow.MessageTimeOut,
-                    messageRequest.InputSource,
-                    messageRequest.Owner,
-                    messageRequest.Text,
-                    messageRequest.IsColorOverride,
-                    messageRequest.ColorOverride));
+                bool echo = true;
+                StaticMessageRequest? outputMessage = null;
 
-                if (_callbacks.TryGetValue(messageRequest.TargetWindowID, out Action<int, StaticMessageRequest> callback))
-                    callback(messageRequest.TargetWindowID, messageRequest);
+                bool isPlayer = messageRequest.IsPlayerMessage;
+                int windowId = messageRequest.TargetWindowID;
+                string owner = messageRequest.Owner;
+                int inputSource = messageRequest.InputSource;
+                string text = messageRequest.Text;
+                if (_callbacks.TryGetValue(messageRequest.TargetWindowID, out BaseCommandSet commandHandler))
+                    echo = commandHandler.Run(isPlayer, windowId, owner, inputSource, ref messageRequest.Text, out outputMessage);
+
+                CMessageWindow messageWindow = windowAndBuffer.Item1;
+                DynamicBuffer<CMessage> messageBuffer = windowAndBuffer.Item2;
+                if (echo)
+                {
+                    messageBuffer.Add(CMessage.Create(
+                        windowId,
+                        messageWindow.LastMessageIndex++,
+                        messageWindow.MessageTimeOut > 0f,
+                        messageWindow.MessageTimeOut,
+                        inputSource,
+                        owner,
+                        text,
+                        messageRequest.IsColorOverride,
+                        messageRequest.ColorOverride));
+                }
+                if (commandHandler != default && outputMessage != null)
+                {
+                    messageBuffer.Add(CMessage.Create(
+                        windowId,
+                        messageWindow.LastMessageIndex++,
+                        messageWindow.MessageTimeOut > 0f,
+                        messageWindow.MessageTimeOut,
+                        -1,
+                        outputMessage.Value.Owner,
+                        outputMessage.Value.Text,
+                        outputMessage.Value.IsColorOverride,
+                        outputMessage.Value.ColorOverride));
+                }
             }
         }
 
@@ -243,8 +268,11 @@ namespace KitchenInGameChat.MessageWindow
                     Main.LogError($"Window with ID {newWindowRequest.Name} ({newWindowRequest.ID}) already exists! Use a different window name.");
                 }
 
-                if (newWindowRequest.Callback != null && !_callbacks.ContainsKey(newWindowRequest.ID))
-                    _callbacks.Add(newWindowRequest.ID, newWindowRequest.Callback);
+                if (newWindowRequest.CommandHandler != null && !_callbacks.ContainsKey(newWindowRequest.ID))
+                {
+                    newWindowRequest.CommandHandler.RegisterCommands();
+                    _callbacks.Add(newWindowRequest.ID, newWindowRequest.CommandHandler);
+                }
 
                 Entity newWindow = EntityManager.CreateEntity();
                 Set(newWindow, new CDoNotPersist());
@@ -260,7 +288,7 @@ namespace KitchenInGameChat.MessageWindow
             }
         }
 
-        private static int PrivateCreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<int, StaticMessageRequest> callback = null)
+        private static int PrivateCreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, BaseCommandSet commandSet = null)
         {
             if (modGUID.IsNullOrEmpty())
             {
@@ -285,7 +313,7 @@ namespace KitchenInGameChat.MessageWindow
                 IsReadOnly = isReadOnly,
                 DoNotDraw = doNotDraw,
                 CanDrag = canDrag,
-                Callback = callback
+                CommandHandler = commandSet
             };
 
             if (Session.CurrentGameNetworkMode == GameNetworkMode.Host)
@@ -296,9 +324,9 @@ namespace KitchenInGameChat.MessageWindow
             return request.ID;
         }
 
-        public static int CreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, Action<int, StaticMessageRequest> callback = null)
+        public static int CreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, BaseCommandSet commandSet = null)
         {
-            return PrivateCreateMessageWindow(modGUID, name, hideName, canDrag, messageTimeOutSeconds, maxMessageCount, style, isReadOnly, doNotDraw, callback);
+            return PrivateCreateMessageWindow(modGUID, name, hideName, canDrag, messageTimeOutSeconds, maxMessageCount, style, isReadOnly, doNotDraw, commandSet);
         }
 
         public static int GetWindowID(string modGUID, string windowName)

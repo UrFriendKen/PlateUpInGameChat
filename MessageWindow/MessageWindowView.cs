@@ -321,6 +321,10 @@ namespace KitchenInGameChat.MessageWindow
 
                 CheckBlockInput();
             }
+            else
+            {
+                RemoveInputBlock();
+            }
             if (_textFieldWasDefocusedDelay > 0f)
                 _textFieldWasDefocusedDelay -= DeltaTime;
         }

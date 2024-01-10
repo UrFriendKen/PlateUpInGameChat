@@ -11,31 +11,47 @@ using UnityEngine;
 
 namespace KitchenInGameChat.MessageWindow
 {
-    public class MessageWindowView : ResponsiveObjectView<MessageWindowView.ViewData, MessageWindowView.ResponseData>
+    public class MessageWindowView : ResponsiveObjectView<MessageWindowView.ViewData, MessageWindowView.ResponseData>, IInputConsumer
     {
-        private static HashSet<int> _inputBlockingWindows = new HashSet<int>();
+        private bool ShouldLock = false;
+        private Dictionary<int, InputLock.Lock> Locks = new Dictionary<int, InputLock.Lock>();
 
-        public static bool ShouldBlockInput => _inputBlockingWindows.Count > 0;
-
-        internal static bool ShouldBlockInputForPlayer(int playerId)
+        internal bool ShouldBlockInputForPlayer(int playerId)
         {
-            return ShouldBlockInput && PlayerUtils.GetLocalPlayerControllerType(playerId) == ControllerType.Keyboard;
+            return PlayerUtils.GetLocalPlayerControllerType(playerId) == ControllerType.Keyboard;
         }
 
-        protected void AddInputBlock()
+        public InputConsumerState TakeInput(int player_id, InputState state)
         {
-            if (_id == -1 || _inputBlockingWindows.Contains(_id))
-                return;
-            _inputBlockingWindows.Add(_id);
+            bool hasLock = Locks.TryGetValue(player_id, out InputLock.Lock inputLock);
+            if (ShouldLock && PlayerUtils.GetLocalPlayerControllerType(player_id) == ControllerType.Keyboard)
+            {
+                if (!hasLock)
+                    Locks.Add(player_id, InputSourceIdentifier.DefaultInputSource.SetInputLock(player_id, PlayerLockState.NonPause));
+                return InputConsumerState.Consumed;
+            }
+
+            if (hasLock)
+            {
+                Locks.Remove(player_id);
+                InputSourceIdentifier.DefaultInputSource.ReleaseLock(player_id, inputLock);
+            }
+            return InputConsumerState.NotConsumed;
         }
 
-        protected void RemoveInputBlock()
+        void Start()
         {
-            if (_inputBlockingWindows.Contains(_id))
-                _inputBlockingWindows.Remove(_id);
+            LocalInputSourceConsumers.Register(this);
         }
 
-
+        void OnDestroy()
+        {
+            foreach (KeyValuePair<int, InputLock.Lock> kvp in Locks)
+            {
+                InputSourceIdentifier.DefaultInputSource.ReleaseLock(kvp.Key, kvp.Value);
+            }
+            LocalInputSourceConsumers.Remove(this);
+        }
 
         [MessagePackObject(false)]
         public struct Message
@@ -319,24 +335,17 @@ namespace KitchenInGameChat.MessageWindow
                 else if (Input.GetKey(AltFocusTextFieldKeyCode) == false)
                     _altFocusKeyWasPressed = false;
 
-                CheckBlockInput();
-            }
-            else
-            {
-                RemoveInputBlock();
+                if (GUI.GetNameOfFocusedControl() == _uniqueTextFieldName && BlockInputCaptureWhenFocused)
+                {
+                    ShouldLock = true;
+                }
+                else
+                {
+                    ShouldLock = false;
+                }
             }
             if (_textFieldWasDefocusedDelay > 0f)
                 _textFieldWasDefocusedDelay -= DeltaTime;
-        }
-
-        void CheckBlockInput()
-        {
-            if (BlockInputCaptureWhenFocused && GUI.GetNameOfFocusedControl() == _uniqueTextFieldName)
-            {
-                AddInputBlock();
-                return;
-            }
-            RemoveInputBlock();
         }
 
         void RecalculateDisplayVariables()

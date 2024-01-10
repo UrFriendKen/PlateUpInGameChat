@@ -1,9 +1,9 @@
-﻿using KitchenInGameChat.MessageWindow;
+﻿using Controllers;
+using KitchenInGameChat.MessageWindow;
 using KitchenLib.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace KitchenInGameChat.Commands
@@ -14,19 +14,35 @@ namespace KitchenInGameChat.Commands
         {
             public string Action;
             public List<string> Args;
+
+            public int TargetWindowID;
+            public string Owner;
+            public string Text;
+            public bool IsPlayer;
+            public bool IsHost;
         }
 
         protected struct CommandResult
         {
             public bool Success;
-            public string OutputMessage;
             public bool Echo;
+
+            public string OutputMessage;
+            public float MessageTimeout = 0f;
+
+            public CommandResult()
+            {
+            }
         }
 
         protected abstract class BaseCommand
         {
             public abstract string Action { get; }
-            public abstract CommandResult Perform(List<string> args);
+            public virtual CommandResult Perform(CommandData data)
+            {
+                return Handle(data);
+            }
+            protected abstract CommandResult Handle(CommandData data);
         }
 
         public enum Status
@@ -49,11 +65,13 @@ namespace KitchenInGameChat.Commands
 
         private readonly Dictionary<string, BaseCommand> Commands = new Dictionary<string, BaseCommand>();
 
-        protected virtual bool Tokenize(string input, out CommandData commandData, out string errorMessage)
+        protected virtual bool ParseInput(StaticMessageRequest input, out CommandData commandData, out string errorMessage)
         {
+            string text = input.Text;
+
             commandData = default;
             errorMessage = null;
-            string[] parts = input.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = text.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
             string action = parts[0].Substring(1);
             if (action.IsNullOrEmpty())
@@ -93,13 +111,23 @@ namespace KitchenInGameChat.Commands
 
             commandData.Action = action;
             commandData.Args = arguments;
+
+            commandData.TargetWindowID = input.TargetWindowID;
+            commandData.Owner = input.Owner;
+            commandData.Text = input.Text;
+            commandData.IsPlayer = input.IsPlayerMessage;
+            commandData.IsHost = input.InputSource == InputSourceIdentifier.Identifier.Value;
+
             return true;
         }
 
         // If return true, echo input (or escapedInput if not null or empty)
-        public bool Run(in bool isPlayer, in int windowID, in string fromUser, in int inputSource, ref string text, out StaticMessageRequest? outputMessage)
+        public bool Run(StaticMessageRequest inputMessage, out string modifiedMessageText, out StaticMessageRequest? runStatusOutput)
         {
-            outputMessage = null;
+            modifiedMessageText = null;
+            runStatusOutput = null;
+
+            string text = inputMessage.Text;
             if (!text.StartsWith($"{CommandAndEscapeChar}"))
             {
                 LastCommandStatus = Status.PassThrough;
@@ -113,19 +141,19 @@ namespace KitchenInGameChat.Commands
                 return true;
             }
 
-            if (!Tokenize(text, out CommandData commandData, out string errorMessage))
+            if (!ParseInput(inputMessage, out CommandData commandData, out string errorMessage))
             {
                 if (!errorMessage.IsNullOrEmpty())
                 {
                     LogError(errorMessage);
-                    outputMessage = CreateMessageRequest(errorMessage);
+                    runStatusOutput = CreateMessageRequest(errorMessage);
                 }
                 LastCommandStatus = Status.FailedToTokenize;
                 return EchoIfFailedToTokenize;
             }
 
             CommandResult result;
-            if (!Commands.TryGetValue(commandData.Action, out BaseCommand commmand))
+            if (!Commands.TryGetValue(commandData.Action, out BaseCommand command))
             {
                 result = new CommandResult()
                 {
@@ -136,7 +164,7 @@ namespace KitchenInGameChat.Commands
             }
             else
             {
-                result = commmand.Perform(commandData.Args);
+                result = command.Perform(commandData);
             }
 
             if (result.Success)
@@ -150,18 +178,19 @@ namespace KitchenInGameChat.Commands
 
             if (!result.OutputMessage.IsNullOrEmpty())
             {
-                outputMessage = CreateMessageRequest(result.OutputMessage);
+                runStatusOutput = CreateMessageRequest(result.OutputMessage, result.MessageTimeout);
             }
             return result.Echo;
         }
 
-        private StaticMessageRequest CreateMessageRequest(string message)
+        private StaticMessageRequest CreateMessageRequest(string message, float timeout = 0f)
         {
             return new StaticMessageRequest()
             {
                 Owner = Name,
                 InputSource = -1,
-                Text = message
+                Text = message,
+                MessageTimeoutOverride = timeout
             };
         }
 

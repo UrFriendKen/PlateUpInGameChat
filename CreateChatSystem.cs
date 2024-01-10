@@ -15,7 +15,7 @@ namespace KitchenInGameChat
         public int ID;
     }
 
-    public sealed class CreateChatSystem : GameSystemBase
+    public sealed class CreateChatSystem : GameSystemBase, IModSystem
     {
         protected override void OnUpdate()
         {
@@ -24,7 +24,7 @@ namespace KitchenInGameChat
                 SChatWindow chatWindow = new SChatWindow()
                 {
                     // Instead of doing this, store a list of registered windows in MessageWindowController. Then in OnUpdate() check if the window still exists by id? Or does CDoNotPersist take care of that?
-                    ID = MessageWindowController.CreateMessageWindow(Main.MOD_GUID, Main.CHAT_WINDOW_NAME, hideName: true, isReadOnly: false, maxMessageCount: 50, commandSet: new ChatCommandSet())
+                    ID = MessageWindowController.CreateMessageWindow(Main.MOD_GUID, Main.CHAT_WINDOW_NAME, hideName: true, isReadOnly: false, maxMessageCount: 50)// commandSet: new ChatCommandSet())
                 };
                 Entity singleton = Set(chatWindow);
                 Set<CPersistThroughSceneChanges>(singleton);

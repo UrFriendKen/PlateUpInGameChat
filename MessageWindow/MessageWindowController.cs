@@ -2,7 +2,6 @@
 using KitchenInGameChat.Commands;
 using KitchenLib.Utils;
 using KitchenMods;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
@@ -44,8 +43,20 @@ namespace KitchenInGameChat.MessageWindow
         public string Text;
         public bool IsColorOverride;
         public Color ColorOverride;
+        public float MessageTimeoutOverride;
 
         public bool IsPlayerMessage => InputSource != -1;
+
+        public StaticMessageRequest(StaticMessageRequest copy)
+        {
+            TargetWindowID = copy.TargetWindowID;
+            InputSource = copy.InputSource;
+            Owner = copy.Owner;
+            Text = copy.Text;
+            IsColorOverride = copy.IsColorOverride;
+            ColorOverride = copy.ColorOverride;
+            MessageTimeoutOverride = copy.MessageTimeoutOverride;
+        }
 
         public static StaticMessageRequest FromCMessageRequest(CMessageRequest cMessageRequest)
         {
@@ -133,6 +144,29 @@ namespace KitchenInGameChat.MessageWindow
                 ColorOverride = colorOverride
             };
         }
+
+        public static CMessage FromWindowAndMessageRequest(CMessageWindow window, StaticMessageRequest messageRequest)
+        {
+            float timeout = messageRequest.MessageTimeoutOverride > 0f ? messageRequest.MessageTimeoutOverride : window.MessageTimeOut;
+            return new CMessage()
+            {
+                WindowID = messageRequest.TargetWindowID,
+                Index = window.LastMessageIndex,
+                HasTimeOut = timeout > 0f,
+                TimeRemaining = timeout,
+                InputSource = messageRequest.InputSource,
+                Owner = new FixedString128(messageRequest.Owner),
+                Text = new FixedString512(messageRequest.Text),
+                IsColorOverride = messageRequest.IsColorOverride,
+                ColorOverride = messageRequest.ColorOverride
+            };
+        }
+
+        public CMessage UpdateTimeRemaining(float timePassed)
+        {
+            TimeRemaining -= timePassed;
+            return this;
+        }
     }
 
     public class MessageWindowController : GameSystemBase
@@ -170,7 +204,7 @@ namespace KitchenInGameChat.MessageWindow
                 if (!windowsAndBuffers.ContainsKey(messageWindow.ID))
                     windowsAndBuffers.Add(messageWindow.ID, (messageWindow, messages));
 
-                UpdateMessageTimeRemaining(messageWindow, messages);
+                UpdateMessageTimeRemaining(messageWindow, ref messages);
 
                 Set(windowEntity, messageWindow);
             }
@@ -186,7 +220,7 @@ namespace KitchenInGameChat.MessageWindow
             HandleNewWindowRequests(windowsAndBuffers.Keys.ToHashSet());
         }
 
-        protected void UpdateMessageTimeRemaining(CMessageWindow messageWindow, DynamicBuffer<CMessage> messages)
+        protected void UpdateMessageTimeRemaining(CMessageWindow messageWindow, ref DynamicBuffer<CMessage> messages)
         {
             float dt = Time.DeltaTime;
             int counter = 0;
@@ -196,7 +230,7 @@ namespace KitchenInGameChat.MessageWindow
                 CMessage message = messages[i];
                 if (message.HasTimeOut)
                 {
-                    message.TimeRemaining -= dt;
+                    messages[i] = message.UpdateTimeRemaining(dt);
                 }
                 if (message.HasTimeOut && message.TimeRemaining < 0f || counter > messageWindow.MaxMessageCount)
                 {
@@ -218,42 +252,22 @@ namespace KitchenInGameChat.MessageWindow
 
                 bool echo = true;
                 StaticMessageRequest? outputMessage = null;
-
-                bool isPlayer = messageRequest.IsPlayerMessage;
-                int windowId = messageRequest.TargetWindowID;
-                string owner = messageRequest.Owner;
-                int inputSource = messageRequest.InputSource;
-                string text = messageRequest.Text;
+                string modifiedText = null;
                 if (_callbacks.TryGetValue(messageRequest.TargetWindowID, out BaseCommandSet commandHandler))
-                    echo = commandHandler.Run(isPlayer, windowId, owner, inputSource, ref messageRequest.Text, out outputMessage);
+                    echo = commandHandler.Run(new StaticMessageRequest(messageRequest), out modifiedText, out outputMessage);
+
+                if (!modifiedText.IsNullOrEmpty())
+                    messageRequest.Text = modifiedText;
 
                 CMessageWindow messageWindow = windowAndBuffer.Item1;
                 DynamicBuffer<CMessage> messageBuffer = windowAndBuffer.Item2;
                 if (echo)
                 {
-                    messageBuffer.Add(CMessage.Create(
-                        windowId,
-                        messageWindow.LastMessageIndex++,
-                        messageWindow.MessageTimeOut > 0f,
-                        messageWindow.MessageTimeOut,
-                        inputSource,
-                        owner,
-                        text,
-                        messageRequest.IsColorOverride,
-                        messageRequest.ColorOverride));
+                    messageBuffer.Add(CMessage.FromWindowAndMessageRequest(messageWindow, messageRequest));
                 }
                 if (commandHandler != default && outputMessage != null)
                 {
-                    messageBuffer.Add(CMessage.Create(
-                        windowId,
-                        messageWindow.LastMessageIndex++,
-                        messageWindow.MessageTimeOut > 0f,
-                        messageWindow.MessageTimeOut,
-                        -1,
-                        outputMessage.Value.Owner,
-                        outputMessage.Value.Text,
-                        outputMessage.Value.IsColorOverride,
-                        outputMessage.Value.ColorOverride));
+                    messageBuffer.Add(CMessage.FromWindowAndMessageRequest(messageWindow, outputMessage.Value));
                 }
             }
         }
@@ -288,7 +302,7 @@ namespace KitchenInGameChat.MessageWindow
             }
         }
 
-        private static int PrivateCreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, BaseCommandSet commandSet = null)
+        private static int PrivateCreateMessageWindow(string modGUID, string name, bool hideName, bool canDrag, float messageTimeOutSeconds, int maxMessageCount, MessageWindowStyle style, bool isReadOnly, bool doNotDraw, BaseCommandSet commandSet)
         {
             if (modGUID.IsNullOrEmpty())
             {
@@ -324,7 +338,7 @@ namespace KitchenInGameChat.MessageWindow
             return request.ID;
         }
 
-        public static int CreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 5f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, BaseCommandSet commandSet = null)
+        public static int CreateMessageWindow(string modGUID, string name, bool hideName = false, bool canDrag = true, float messageTimeOutSeconds = 0f, int maxMessageCount = 10, MessageWindowStyle style = MessageWindowStyle.Normal, bool isReadOnly = false, bool doNotDraw = false, BaseCommandSet commandSet = null)
         {
             return PrivateCreateMessageWindow(modGUID, name, hideName, canDrag, messageTimeOutSeconds, maxMessageCount, style, isReadOnly, doNotDraw, commandSet);
         }
@@ -334,7 +348,7 @@ namespace KitchenInGameChat.MessageWindow
             return VariousUtils.GetID($"{modGUID}:{windowName}");
         }
 
-        public static void SendMessage(int targetWindowID, string displayName, string text, Color? colorOverride = null)
+        public static void SendMessage(int targetWindowID, string displayName, string text, Color? colorOverride = null, float messageTimeoutOverride = 0f)
         {
             StaticMessageRequest request = new StaticMessageRequest()
             {
@@ -343,7 +357,8 @@ namespace KitchenInGameChat.MessageWindow
                 Owner = displayName,
                 Text = text,
                 IsColorOverride = colorOverride.HasValue,
-                ColorOverride = colorOverride.HasValue ? colorOverride.Value : default
+                ColorOverride = colorOverride.HasValue ? colorOverride.Value : default,
+                MessageTimeoutOverride = messageTimeoutOverride
             };
             _staticMessageRequests.Enqueue(request);
         }

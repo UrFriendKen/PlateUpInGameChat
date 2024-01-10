@@ -19,6 +19,7 @@ namespace KitchenInGameChat
         public const string CHAT_SELF_PLAYER_COLOR_ID = "chatSelfPlayerColor";
         public const string CHAT_OTHER_PLAYER_COLOR_ID = "chatOtherPlayerColor";
         public const string CHAT_ENABLED_ID = "chatHide";
+        public const string CHAT_TOGGLE_ENABLED_KEY_ID = "chatToggleEnabled";
         public const string CHAT_DO_FADE_ID = "chatDoFade";
         public const string CHAT_INACTIVITY_TIMEOUT = "chatInactivityTimeout";
         public const string CHAT_HIDE_HISTORY_WHEN_FADED_ID = "chatHideHistoryWhenFaded";
@@ -80,6 +81,10 @@ namespace KitchenInGameChat
                 if (fixedPosition != window.WindowPos)
                     window.MoveWindow(fixedPosition);
             }
+
+            if (Enum.TryParse(PrefManager.Get<string>(CHAT_TOGGLE_ENABLED_KEY_ID), out keyCode) &&
+                Input.GetKeyDown(keyCode))
+                PrefManager.Set(CHAT_ENABLED_ID, !PrefManager.Get<bool>(CHAT_ENABLED_ID));
         }
 
         public static void CreatePreferences(string modGUID, string modName)
@@ -255,24 +260,34 @@ namespace KitchenInGameChat
                         new bool[] { false, true },
                         new string[] { "Disabled", "Enabled" })
                     .AddSpacer()
-                    .AddLabel("Send Message Key Code")
-                    .AddOption<string>(
-                        CHAT_SEND_MESSAGE_KEY_ID,
-                        "Return",
-                        keyCodeStrings,
-                        keyCodeStrings)
-                    .AddLabel("Alternate Text Field Focus Key Code")
-                    .AddOption<string>(
-                        CHAT_ALT_FOCUS_TEXT_FIELD_KEY_ID,
-                        "Slash",
-                        keyCodeStrings,
-                        keyCodeStrings)
-                    .AddLabel("Defocus Text Field Key Code")
-                    .AddOption<string>(
-                        CHAT_DEFOCUS_TEXT_FIELD_KEY_ID,
-                        "Escape",
-                        keyCodeStrings,
-                        keyCodeStrings)
+                    .AddSubmenu("Controls", "advancedControls")
+                        .AddLabel("Send Message Key Code")
+                        .AddOption<string>(
+                            CHAT_SEND_MESSAGE_KEY_ID,
+                            "Return",
+                            keyCodeStrings,
+                            keyCodeStrings)
+                        .AddLabel("Alternate Text Field Focus Key Code")
+                        .AddOption<string>(
+                            CHAT_ALT_FOCUS_TEXT_FIELD_KEY_ID,
+                            "Slash",
+                            keyCodeStrings,
+                            keyCodeStrings)
+                        .AddLabel("Defocus Text Field Key Code")
+                        .AddOption<string>(
+                            CHAT_DEFOCUS_TEXT_FIELD_KEY_ID,
+                            "Escape",
+                            keyCodeStrings,
+                            keyCodeStrings)
+                        .AddLabel("Toggle Enabled Key Code")
+                        .AddOption<string>(
+                            CHAT_TOGGLE_ENABLED_KEY_ID,
+                            "F6",
+                            keyCodeStrings,
+                            keyCodeStrings)
+                        .AddSpacer()
+                        .AddSpacer()
+                    .SubmenuDone()
                     .AddSpacer()
                     .AddSpacer()
                 .SubmenuDone()
